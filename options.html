@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Scrap Configuration</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    label { display: block; margin-bottom: 8px; }
+    input { width: 100%; padding: 8px; margin-bottom: 12px; }
+    button { padding: 10px 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Danswer Configuration</h1>
+  <label for="host">Danswer URL :</label>
+  <input type="text" id="host" placeholder="https://your-host.danswer.ai" />
+  
+  <label for="token">Basic Danswer API Token :</label>
+  <input type="text" id="token" placeholder="Enter your token here" />
+  
+  <label for="connectorId">Basic Danswer API Token :</label>
+  <input type="number" id="connectorId" placeholder="Enter your Connector ID here" />
+
+  <button id="save">Save</button>
+
+  <!-- Link to the external JS file -->
+  <script src="options.js"></script>
+</body>
+</html>
