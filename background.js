@@ -18,48 +18,77 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 let allLinks = new Set();
 let processedLinks = new Set();
 let dataCollection = [];
-
-// Listen to actions from popup
+let uploadQueue = []; // Queue for documents to upload
+let isUploading = false; // Indicator to know if an upload is in progress
+const chatSessions = {};
+// Listen to messages from the popup or content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'createZip') {
-        // create zip file
-        createZipFile(message.method);
+  if (message.action === 'getChatSessionId') {
+    console.log(sender.tab.id, chatSessions);
+    sendResponse({ chatSessionId: chatSessions[sender.tab.id] });
+  } else if (message.action === 'setChatSessionId') {
+    chatSessions[sender.tab.id] = message.chatSessionId;
+  } else if (message.action === 'createZip') {
+    // Create the ZIP file
+    createZipFile(message.method);
+  } else if (message.action === 'reset') {
+    // Reset links and datacollection
+    allLinks = new Set();
+    processedLinks = new Set();
+    dataCollection = [];
+    uploadQueue = [];
+    isUploading = false;
+    chrome.runtime.sendMessage({ action: 'updateDocCount' });
+    console.log('Cleaned all data')
   } else if (message.action === 'collectLinks') {
+    // Collect links
     message.links.forEach(link => {
       if (!allLinks.has(link) && !processedLinks.has(link)) {
         allLinks.add(link);
       }
     });
+    chrome.runtime.sendMessage({ action: 'updateDocCount' });
     processNextLink();
   } else if (message.action === 'extractData') {
-    dataCollection.push({ url: message.url, content: message.content });
+    const pageData = { url: message.url, content: message.content };
+    console.log(message.url);
+    dataCollection.push(pageData);
+    // // Feature deactivated as very slow - prefer zip + metadata
+    // uploadQueue.push(pageData); // Add the document to the upload queue
+    // processUploadQueue(); // Start processing the upload queue
     processedLinks.add(message.url);
-    processNextLink();
+    chrome.runtime.sendMessage({ action: 'updateDocCount' });
+    processNextLink(); 
   } else if (message.action === 'closeTab') {
+    // Close the tab
     chrome.tabs.remove(sender.tab.id);
+  } else if (message.action === 'getDataCollection') {
+    sendResponse({ dataCollection: dataCollection });
   }
 });
 
-// Process next link
+// Process the next link
 function processNextLink() {
   if (allLinks.size === 0) {
-    // All pages scrapped
-    console.log('All pages were scrapped')
+    // All pages have been scraped
+    console.log('All pages have been scraped');
+
     if (dataCollection.length > 0) {
-        console.log('Preparation du zip')
-        createZipFile();
-        console.log('zip préparé')
+      console.log('Preparing the ZIP');
+      createZipFile();
+      console.log('ZIP prepared');
     }
-    console.log('All pages were scrapped, ready to download or upload')
+
+    console.log('Ready to download or upload');
     return;
   }
 
   const nextLink = allLinks.values().next().value;
   allLinks.delete(nextLink);
 
-  // Open new tab for scrapping
+  // Open a new tab for scraping
   chrome.tabs.create({ url: nextLink, active: false }, (tab) => {
-    // Inject script into web page
+    // Inject the script into the web page
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: ['contentScriptExtract.js']
@@ -77,146 +106,204 @@ function createZipFile(action) {
       zip.file(fileName, page.content);
     });
   
+    // Generate the domain for the ZIP name
+    const domain = new URL(dataCollection[0].url).hostname;
+
+    // Create the .danswer_metadata.json file
+    const metadata = dataCollection.map(page => {
+      const fileName = page.url.replace(/[^a-z0-9]/gi, '_') + '.html';
+      return {
+          filename: fileName,
+          link: page.url,
+          file_display_name: fileName
+      };
+    });
+
+    // Add the .danswer_metadata.json file to the ZIP
+    zip.file('.danswer_metadata.json', JSON.stringify(metadata, null, 4));
+
     // Generate Zip file
     zip.generateAsync({ type: 'blob' })
       .then(function(blob) {
         if (action === 'download') {
-          // Si l'utilisateur choisit le téléchargement
+          // If the user chooses to download
           downloadZip(blob);
         } else if (action === 'upload') {
-          // Si l'utilisateur choisit l'upload vers l'API Danswer
+          // If the user chooses to upload to the Danswer API
           uploadToDanswer(blob);
         }
       })
       .catch(error => {
-        console.error('Erreur lors de la génération du ZIP:', error);
+        console.error('Error generating the ZIP:', error);
       });
   }
   
-  // Download Zip localy
-  function downloadZip(blob) {
-    const fileReader = new FileReader();
-    fileReader.onload = function(event) {
-      const arrayBuffer = event.target.result;
-      const blobUrl = `data:application/zip;base64,${arrayBufferToBase64(arrayBuffer)}`;
-  
-      chrome.downloads.download({
-        url: blobUrl,
-        filename: 'site_archive.zip',
-        saveAs: true
-      }, function(downloadId) {
-        if (chrome.runtime.lastError) {
-          console.error('Erreur de téléchargement:', chrome.runtime.lastError.message);
-        } else {
-          console.log('Téléchargement démarré, ID:', downloadId);
-        }
-      });
-    };
-    fileReader.readAsArrayBuffer(blob);  // Read the blob into ArrayBuffer
-  }
+// Download Zip locally
+function downloadZip(blob) {
+  const fileReader = new FileReader();
+  fileReader.onload = function(event) {
+    const arrayBuffer = event.target.result;
+    const blobUrl = `data:application/zip;base64,${arrayBufferToBase64(arrayBuffer)}`;
 
-// Upload content to Danswer
-function uploadToDanswer() {
-  // Get host token and connector id from config
-  chrome.storage.sync.get(['danswerHost', 'danswerToken','danswerConnectorId'], function(data) {
-    const host = data.danswerHost;
-    const token = data.danswerToken;
-    const connectorId = data.danswerConnectorId;
+    // Generate the ZIP file name with the domain and date
+    const domain = new URL(dataCollection[0].url).hostname; // Get the domain
+    const date = new Date().toISOString().split('T')[0]; // Date format YYYY-MM-DD
+    const zipFileName = `${domain}_${date}.zip`; // ZIP file name
 
-    
-    if (!host || !token || connectorId == undefined ) {
-      console.error("Host, token or connector ID weren't configured");
-      return;
-    }
+    chrome.downloads.download({
+      url: blobUrl,
+      filename: zipFileName,
+      saveAs: true
+    }, function(downloadId) {
+      if (chrome.runtime.lastError) {
+        console.error('Download error:', chrome.runtime.lastError.message);
+      } else {
+        console.log('Download started, ID:', downloadId);
+      }
+    });
+  };
+  fileReader.readAsArrayBuffer(blob);  // Read the blob into ArrayBuffer
+}
 
-    // Stop if no data
-    if (dataCollection.length === 0) {
-      console.error("No data to upload");
-      return;
-    }
+// Generate a unique identifier for the document
+function generateSlug(text) {
+  return text
+    .replace(/[^a-z0-9]+/gi, '_') // Replace non-alphanumeric characters with underscores
+    .replace(/^_+|_+$/g, '') // Remove underscores at the beginning and end
+    .toLowerCase();
+}
 
-    // Get domain name
-    const firstUrl = dataCollection[0].url;
-    const domain = new URL(firstUrl).hostname;
+// Function to upload a document to Danswer
+function uploadToDanswer(page) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get(['danswerHost', 'danswerToken', 'danswerConnectorId'], async function(data) {
+      const { danswerHost: host, danswerToken: token, danswerConnectorId: connectorId } = data;
 
-    // Generate unique ID
-    const date = new Date();
-    const documentId = `${domain}`;
+      if (!host || !token || connectorId == undefined) {
+        console.error("Host, token or connector ID not configured");
+        reject("Missing configurations");
+        return;
+      }
 
-    // Build the section base on all pages
-    const sections = dataCollection.map(page => {
-      return {
+      // Build sections with the document
+      const sections = [{
         text: page.content,
         link: page.url
+      }];
+
+      // Use the domain and timestamp as a unique document identifier
+      const domain = new URL(page.url).hostname;
+      const documentId = generateSlug(page.url);
+
+      const requestBody = {
+        cc_pair_id: connectorId,
+        document: {
+          id: documentId,
+          sections: sections,
+          source: "web",
+          semantic_identifier: domain,
+          metadata: { tag: "informational" },
+          doc_updated_at: new Date().toISOString()
+        }
       };
-    });
 
-    // Créer la requête JSON selon la documentation Danswer
-    const requestBody = {
-      cc_pair_id: connectorId, // Connector unique ID
-      document: {
-        id: documentId,  // Document Id based on domain name
-        sections: sections,  // All pages collected
-        source: "web",
-        semantic_identifier: `Scrap from ${domain}`,  // Collection context
-        metadata: { tag: "informational" },
-        doc_updated_at: new Date().toISOString()  // Update date
-      }
-    };
+      try {
+        const response = await fetch(`${host}/api/danswer-api/ingestion`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        });
 
-    // Envoyer la requête HTTP vers l'API Danswer
-    fetch(`${host}/api/danswer-api/ingestion`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    })
-    .then(response => {
-      // Check if the response is valid and JSON can be parsed
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const resultText = await response.text();
+        console.log(`Document successfully uploaded: ${documentId}`, resultText);
+        resolve(); // Resolve the promise
+      } catch (error) {
+        console.error(`Error uploading document ${documentId}:`, error);
+        reject(error); // Reject the promise
       }
-      return response.text();  // Retrieve the raw text of the response
-      console.log('Successfully uploaded to Danswer !');
-    })
-    .then(text => {
-      if (text) {
-        const jsonResponse = JSON.parse(text);  // Try to parse the response
-        console.log('API answer:', jsonResponse);
-      } else {
-        console.log('Empty API response');
-      }
-    })
-    .catch(error => {
-      console.error('Error while uploading to API:', error);
     });
   });
 }
 
-  // Convert ArrayBuffer to base64
-  function arrayBufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);  // Conversion en base64
+// New function to process the upload queue sequentially
+function processUploadQueue() {
+  if (isUploading || uploadQueue.length === 0) {
+    // An upload is already in progress or the queue is empty
+    return;
   }
-  
 
+  isUploading = true; // Indicate that an upload is in progress
+  const pageData = uploadQueue.shift(); // Extract the first document from the queue
+
+  uploadToDanswer(pageData)
+    .then(() => {
+      isUploading = false; // The upload is complete
+      // Check if there are other documents to process
+      if (uploadQueue.length > 0) {
+        processUploadQueue(); // Process the next document
+      }
+    })
+    .catch((error) => {
+      console.error('Error uploading document:', error);
+      isUploading = false; // In case of error, allow the process to continue
+      if (uploadQueue.length > 0) {
+        processUploadQueue();
+      }
+    });
+}
+
+// Convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);  // Convert to base64
+}
 // Start collection process
-chrome.action.onClicked.addListener((tab) => {
-  // Reset collections
-  allLinks = new Set();
-  processedLinks = new Set();
-  dataCollection = [];
-
+chrome.action.onClicked.addListener((tab) => { 
   // Inject script in current page
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
     files: ['contentScript.js']
   });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Vérifier si l'URL est définie et commence par 'http' ou 'https'
+  if (tab.url && (tab.url.startsWith('http') || tab.url.startsWith('https'))) {
+    console.log('Tab updated');
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['chatbotScript.js']
+    }, () => {
+      if (chrome.runtime.lastError) {
+        console.error(chrome.runtime.lastError);
+      } else {
+        console.log('chatbotScript.js injected');
+      }
+    });
+
+    chrome.scripting.insertCSS({
+      target: { tabId: tabId },
+      files: ['chatbotStyle.css']
+    }, () => {
+      if (chrome.runtime.lastError) {
+        console.error(chrome.runtime.lastError);
+      } else {
+        console.log('chatbotScript.css injected');
+      }
+    });
+  } else {
+    console.warn('Cannot inject script into this URL:', tab.url);
+  }
 });

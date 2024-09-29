@@ -1,29 +1,41 @@
 // contentScript.js
 
 (function() {
+  chrome.storage.sync.get(["scrapRoot", "scrapRegex"], (data) => {
+    const scrapRoot = data.scrapRoot || '';
+    const scrapRegex = new RegExp(data.scrapRegex || '.*');
+
     // Fonction pour vérifier si un lien est interne
     function isInternalLink(href) {
-      // Ignorer les liens JavaScript ou vides
-      if (!href || href.startsWith('javascript:') || href.startsWith('#')) {
-        return false;
-      }
-  
-      // Résoudre le lien par rapport à l'URL actuelle
-      let url;
-      try {
-        url = new URL(href, location.href);
-      } catch (e) {
-        // Si le href n'est pas une URL valide, l'ignorer
-        return false;
-      }
-  
-      // Vérifier que le protocole est HTTP ou HTTPS
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return false;
-      }
-  
-      // Vérifier que le domaine est le même que celui de la page actuelle
-      return url.hostname === location.hostname;
+   
+        // Ignorer les liens JavaScript ou vides
+        if (!href || href.startsWith('javascript:') || href.startsWith('#')) {
+          return false;
+        }
+    
+        // Résoudre le lien par rapport à l'URL actuelle
+        let url;
+        try {
+          url = new URL(href, location.href);
+        } catch (e) {
+          // Si le href n'est pas une URL valide, l'ignorer
+          return false;
+        }
+        console.log(`Analyzing ${url}`)
+
+        // Vérifier que le protocole est HTTP ou HTTPS
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+          return false;
+        }
+
+        if (!url.href.startsWith(scrapRoot) || !scrapRegex.test(url.href)) {
+          console.log(`Rejected ${url} scraRoot: ${url.href.startsWith(scrapRoot)} scrapRegex ${scrapRegex.test(url.href)}`)
+          return false;
+        }
+    
+        // Vérifier que le domaine est le même que celui de la page actuelle
+        return url.hostname === location.hostname;
+
     }
   
     // Fonction pour normaliser les URL
@@ -45,4 +57,6 @@
   
     // Envoyer les liens au background script
     chrome.runtime.sendMessage({ action: 'collectLinks', links: uniqueLinks });
-  })();
+
+  });
+})();

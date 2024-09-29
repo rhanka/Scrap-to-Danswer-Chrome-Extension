@@ -3,7 +3,7 @@
     "name": "Scrap to Zip or Danswer",
     "version": "0.1",
     "description": "Recursive scrapping of a website, download in zip or upload to Danswer.",
-    "permissions": ["scripting", "downloads", "storage", "tabs"],
+    "permissions": ["activeTab","scripting", "downloads", "storage", "tabs"],
     "host_permissions": [
         "https://*/*",
         "http://*/*"
@@ -16,7 +16,6 @@
       "default_popup": "popup.html",
       "default_title": "Scrap now"
     },
-    "options_page": "options.html",
     "web_accessible_resources": [
       {
         "resources": ["jszip.min.js"],
