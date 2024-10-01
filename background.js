@@ -15,15 +15,75 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 // background.js
 
+// Scraping variables
 let allLinks = new Set();
 let processedLinks = new Set();
 let dataCollection = [];
 let uploadQueue = []; // Queue for documents to upload
 let isUploading = false; // Indicator to know if an upload is in progress
+
+// Chatbot variables
 const chatSessions = {};
+let assistants = [];
+
+// Fonction pour récupérer les assistants
+async function fetchAssistants(host, token) {
+  assistants = [];
+  let assistantId = 1;
+  let continueFetching = true;
+
+  while (continueFetching) {
+      try {
+          const response = await fetch(`${host}/api/persona/${assistantId}`, {
+              method: 'GET',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+              }
+          });
+
+          if (response.status === 400) {
+              continueFetching = false;
+          } else {
+              const data = await response.json();
+              assistants.push({
+                  id: assistantId,
+                  name: data.name,
+                  promptId: data.prompts[0].id
+              });
+              assistantId++;
+          }
+      } catch (error) {
+          continueFetching = false;
+      }
+  }
+  console.log(`${assistants.length} assistants available for ${host}`);
+}
+
+function initDanswer() {
+  chrome.storage.sync.get(['danswerHost', 'danswerToken'], (result) => {
+    const host = result.danswerHost;
+    const token = result.danswerToken;
+
+    if (host && token) {
+        fetchAssistants(host, token).then(() => {
+          chrome.runtime.sendMessage({ action: 'getDataCollection' });
+        })
+    } else {
+        console.error('Host ou token Danswer non configuré');
+    }
+  });
+}
+
+initDanswer();
+
 // Listen to messages from the popup or content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'getChatSessionId') {
+  if (message.action === 'initDanswer') {
+    initDanswer()
+  } else if (message.action === 'getAssistants') {
+    sendResponse({ assistants: assistants});
+  } else if (message.action === 'getChatSessionId') {
     console.log(sender.tab.id, chatSessions);
     sendResponse({ chatSessionId: chatSessions[sender.tab.id] });
   } else if (message.action === 'setChatSessionId') {

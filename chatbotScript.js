@@ -12,8 +12,26 @@
     let currentMarkdown = '';
     let currentMessageElement = null;
 
+    let assistants = [];
 
+    function updateAssistants() {
+        chrome.runtime.sendMessage({ action: 'getAssistants' }, (response) => {
+            assistants = response.assistants || [];
+        });
+    }
 
+    function getPromptId(assistantId) {
+        const assistant = assistants.find((a) => a.id === assistantId);
+        console.log(assistants, assistantId, assistant, assistant ? assistant.promptId : null);
+        return assistant ? assistant.promptId : null;
+    }
+    
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'updateAssistants') {
+          console.log('ici')
+          updateAssistants();
+        }
+    });
 
     // Fonction pour créer une session de chat
     function createChatSession() {
@@ -23,7 +41,7 @@
                 console.error("Host, token not configured");
                 return;
             }
-
+            updateAssistants();
             fetch(`${host}/api/chat/create-chat-session`, {
                 method: 'POST',
                 headers: {
@@ -160,7 +178,7 @@
                 alternate_assistant_id: Number(assistantId),
                 chat_session_id: chatSessionId,
                 message: userInput,
-                prompt_id: 8,
+                prompt_id: getPromptId(Number(assistantId)),
                 parent_message_id: parentMessageId,
                 llm_override: null,
                 file_descriptors: [],

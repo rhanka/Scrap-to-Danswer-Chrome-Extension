@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
   chrome.storage.sync.get(['danswerHost', 'danswerToken','danswerConnectorId','danswerAssistantId','scrapRoot','scrapRegex'], function(data) {
     document.getElementById('host').value = data.danswerHost || '';
     document.getElementById('token').value = data.danswerToken || '';
-    document.getElementById('assistantId').value = data.danswerAssistantId !== undefined ? data.danswerAssistantId : '';
+    document.getElementById('assistantId').value = data.danswerAssistant !== undefined ? data.danswerAssistantId : '';
     document.getElementById('connectorId').value = data.danswerConnectorId !== undefined ? data.danswerConnectorId : '';
     document.getElementById('scrapRoot').value = data.scrapRoot || '';
     document.getElementById('scrapRegex').value = data.scrapRegex || '.*';
@@ -22,11 +22,14 @@ document.getElementById('save').addEventListener('click', function() {
   chrome.storage.sync.set({
     danswerHost: host,
     danswerToken: token,
-    danswerAssistantId: connectorId,
-    danswerConnectorId: assistantId,
+    danswerAssistantId: assistantId,
+    danswerConnectorId: connectorId,
     scrapRoot: scrapRoot,
     scrapRegex: scrapRegex
   }, function() {
+    if (host && token) {
+      chrome.runtime.sendMessage({ action: 'initDanswer' });
+    }
     alert('Configuration saved');
   });
 });
