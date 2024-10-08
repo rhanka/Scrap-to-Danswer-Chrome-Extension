@@ -335,4 +335,64 @@
       window.removeEventListener('mousemove', resizeTop);
       window.removeEventListener('mouseup', stopResize);
     }
+
+
+    // Fonction pour afficher l'iframe en surimpression
+    function showOverlay(url) {
+        // Créer le div de surimpression
+        const overlay = document.createElement('div');
+        overlay.id = 'iframeOverlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        overlay.style.zIndex = '1000';
+        overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+
+        // Ajouter l'iframe
+        const iframe = document.createElement('iframe');
+        iframe.src = url;
+        iframe.style.width = '80%';
+        iframe.style.height = '80%';
+        iframe.style.border = 'none';
+        overlay.appendChild(iframe);
+
+        // Ajouter un bouton pour fermer l'overlay
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Fermer';
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.top = '10px';
+        closeBtn.style.right = '10px';
+        closeBtn.style.padding = '10px 20px';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '5px';
+        closeBtn.style.backgroundColor = '#fff';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+        });
+        overlay.appendChild(closeBtn);
+
+        // Ajouter l'overlay au document
+        document.body.appendChild(overlay);
+    }
+
+    // Intercepter les clics sur les liens du markdown
+    document.addEventListener('click', function(event) {
+        const target = event.target;
+        if (target.tagName === 'A' && target.href) {
+            event.preventDefault(); // Empêcher le comportement par défaut
+            const url = target.href;
+            showOverlay(url); // Afficher l'iframe en surimpression
+
+            // Naviguer vers l'URL après un délai
+            setTimeout(() => {
+                window.location.href = url;
+            }, 100);
+        }
+    });
 })();
