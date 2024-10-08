@@ -109,7 +109,7 @@
     chatbotContainer.style.display = 'none'; // Masquer le chatbot par défaut
     chatbotContainer.innerHTML = `
       <div id="chatbotHeader">
-        <span id="minimizeButton" style="cursor: pointer;">❌</span>
+        <span id="minimizeButton" style="cursor: pointer;">✖️</span>
       </div>
       <div id="chatbox"></div>
       <input type="text" id="userInput" placeholder="Type your message here...">
@@ -312,73 +312,111 @@
     resizeHandleLeft.addEventListener('mousedown', initResizeLeft);
     resizeHandleTop.addEventListener('mousedown', initResizeTop);
 
+    let startX, startY, startWidth, startHeight, startLeft, startTop;
+
     function initResizeLeft(e) {
-      window.addEventListener('mousemove', resizeLeft);
-      window.addEventListener('mouseup', stopResize);
+        e.preventDefault();
+        startX = e.clientX;
+        // Désactiver les événements de pointeur sur les éléments en dessous
+        document.body.classList.add('no-pointer-events');
+        startWidth = parseInt(document.defaultView.getComputedStyle(chatbotContainer).width, 10);
+        // Désactiver les événements de pointeur sur les éléments en dessous
+        document.body.classList.add('no-pointer-events');
+        window.addEventListener('mousemove', resizeLeft);
+        window.addEventListener('mouseup', stopResizeLeft);
     }
 
     function initResizeTop(e) {
-      window.addEventListener('mousemove', resizeTop);
-      window.addEventListener('mouseup', stopResize);
+        e.preventDefault();
+        startY = e.clientY;
+        startHeight = parseInt(document.defaultView.getComputedStyle(chatbotContainer).height, 10);
+        // Désactiver les événements de pointeur sur les éléments en dessous
+        document.body.classList.add('no-pointer-events');
+        startTop = parseInt(document.defaultView.getComputedStyle(chatbotContainer).top, 10);
+        window.addEventListener('mousemove', resizeTop);
+        window.addEventListener('mouseup', stopResizeTop);
     }
 
     function resizeLeft(e) {
-      chatbotContainer.style.width = (chatbotContainer.offsetWidth - e.movementX) + 'px';
+        let dx = startX - e.clientX;
+        chatbotContainer.style.width = (startWidth + dx) + 'px';
     }
 
     function resizeTop(e) {
-      chatbotContainer.style.height = (chatbotContainer.offsetHeight - e.movementY) + 'px';
+        let dy = e.clientY - startY;
+        chatbotContainer.style.height = (startHeight - dy) + 'px';
+        chatbotContainer.style.top = (startTop + dy) + 'px';
     }
 
-    function stopResize() {
-      window.removeEventListener('mousemove', resizeLeft);
-      window.removeEventListener('mousemove', resizeTop);
-      window.removeEventListener('mouseup', stopResize);
+    function stopResizeLeft() {
+        window.removeEventListener('mousemove', resizeLeft);
+        window.removeEventListener('mouseup', stopResizeLeft);
+        // Réactiver les événements de pointeur
+        document.body.classList.remove('no-pointer-events');
+    }
+
+    function stopResizeTop() {
+        window.removeEventListener('mousemove', resizeTop);
+        window.removeEventListener('mouseup', stopResizeTop);
+        // Réactiver les événements de pointeur
+        document.body.classList.remove('no-pointer-events');
     }
 
 
+    let originalUrl = window.location.href;
+    let iframe;
     // Fonction pour afficher l'iframe en surimpression
     function showOverlay(url) {
-        // Créer le div de surimpression
-        const overlay = document.createElement('div');
-        overlay.id = 'iframeOverlay';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        overlay.style.zIndex = '1000';
-        overlay.style.display = 'flex';
-        overlay.style.justifyContent = 'center';
-        overlay.style.alignItems = 'center';
+        if (!iframe) {
+            // Créer le div de surimpression
+            const overlay = document.createElement('div');
+            overlay.id = 'iframeOverlay';
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            overlay.style.zIndex = '1000';
+            overlay.style.display = 'flex';
+            overlay.style.justifyContent = 'center';
+            overlay.style.alignItems = 'center';
 
-        // Ajouter l'iframe
-        const iframe = document.createElement('iframe');
-        iframe.src = url;
-        iframe.style.width = '80%';
-        iframe.style.height = '80%';
-        iframe.style.border = 'none';
-        overlay.appendChild(iframe);
+            // Ajouter l'iframe
+            iframe = document.createElement('iframe');
+            iframe.src = url;
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            overlay.appendChild(iframe);
 
-        // Ajouter un bouton pour fermer l'overlay
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Fermer';
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.top = '10px';
-        closeBtn.style.right = '10px';
-        closeBtn.style.padding = '10px 20px';
-        closeBtn.style.border = 'none';
-        closeBtn.style.borderRadius = '5px';
-        closeBtn.style.backgroundColor = '#fff';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
-        });
-        overlay.appendChild(closeBtn);
+            // Ajouter un bouton pour fermer l'overlay
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Fermer';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '10px';
+            closeBtn.style.right = '10px';
+            closeBtn.style.padding = '10px 20px';
+            closeBtn.style.border = 'none';
+            closeBtn.style.borderRadius = '5px';
+            closeBtn.style.backgroundColor = '#fff';
+            closeBtn.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.3)';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+                iframe = null;
+                // Revenir à l'URL d'origine
+                history.pushState(null, '', originalUrl);
+            });
+            overlay.appendChild(closeBtn);
 
-        // Ajouter l'overlay au document
-        document.body.appendChild(overlay);
+            // Ajouter l'overlay au document
+            document.body.appendChild(overlay);
+        } else {
+            iframe.src = url;
+        }
+        // Mettre à jour l'URL dans la barre d'adresse sans recharger la page
+        history.pushState(null, '', url);
     }
 
     // Intercepter les clics sur les liens du markdown
@@ -388,11 +426,6 @@
             event.preventDefault(); // Empêcher le comportement par défaut
             const url = target.href;
             showOverlay(url); // Afficher l'iframe en surimpression
-
-            // Naviguer vers l'URL après un délai
-            setTimeout(() => {
-                window.location.href = url;
-            }, 100);
         }
     });
 })();
