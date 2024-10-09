@@ -14,11 +14,37 @@
 
     let assistants = [];
 
+
     function updateAssistants() {
         chrome.runtime.sendMessage({ action: 'getAssistants' }, (response) => {
-            assistants = response.assistants || [];
+          assistants = response.assistants || [];
+          populateAssistantDropdown();
         });
     }
+    
+    // Fonction pour remplir le dropdown avec les assistants
+    function populateAssistantDropdown() {
+      const assistantSelect = document.getElementById('assistantSelect');
+    
+      // Vider le dropdown avant de le remplir
+      assistantSelect.innerHTML = '<option value="">Select Assistant</option>';
+    
+      assistants.forEach(assistant => {
+          const option = document.createElement('option');
+          option.value = assistant.id; // Utiliser l'assistantId comme valeur
+          option.textContent = assistant.name; // Afficher le nom de l'assistant
+          assistantSelect.appendChild(option);
+      });
+
+      chrome.storage.sync.get('danswerAssistantId', function(data) {
+            // Vérifier si la valeur existe et l'affecter à l'input
+            if (data.danswerAssistantId) {
+                assistantSelect.value = data.danswerAssistantId; // Pré-sélectionner la valeur
+            }
+        });
+    
+    }
+    
 
     function getPromptId(assistantId) {
         const assistant = assistants.find((a) => a.id === assistantId);
@@ -28,7 +54,6 @@
     
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'updateAssistants') {
-          console.log('ici')
           updateAssistants();
         }
     });
@@ -109,6 +134,11 @@
     chatbotContainer.style.display = 'none'; // Masquer le chatbot par défaut
     chatbotContainer.innerHTML = `
       <div id="chatbotHeader">
+        <select id="assistantSelect">
+            <option value="">Select Assistant</option>
+            <!-- Les options seront ajoutées dynamiquement ici -->
+        </select>
+        <input type="hidden" id="assistantId" />
         <span id="minimizeButton" style="cursor: pointer;">✖️</span>
       </div>
       <div id="chatbox"></div>
@@ -118,7 +148,18 @@
       <div id="resizeHandleTop" class="resize-handle"></div>
     `;
     document.body.appendChild(chatbotContainer);
-  
+    // Écouter les changements dans le dropdown
+    document.getElementById('assistantSelect').addEventListener('change', (event) => {
+        const selectedId = event.target.value;
+        document.getElementById('assistantId').value = selectedId; // Conserver l'assistantId
+    });
+    document.getElementById('assistantSelect').addEventListener('input', function() {
+        // Mettre à jour chrome.storage.sync avec la nouvelle valeur
+        chrome.storage.sync.set({ danswerAssistantId: document.getElementById('assistantSelect').value }, function() {
+            console.log('Valeur mise à jour dans chrome.storage.sync:', document.getElementById('assistantSelect').value);
+        });
+    });
+    updateAssistants();
     const minimizedIcon = document.createElement('div');
     minimizedIcon.id = 'minimizedIcon';
     minimizedIcon.style.position = 'fixed';
@@ -127,7 +168,7 @@
     minimizedIcon.style.cursor = 'pointer';
     minimizedIcon.textContent = '💬';
     document.body.appendChild(minimizedIcon);
-  
+    
     minimizedIcon.addEventListener('click', () => {
       chatbotContainer.style.display = 'block';
       minimizedIcon.style.display = 'none';
@@ -137,6 +178,7 @@
     minimizeButton.addEventListener('click', () => {
       chatbotContainer.style.display = 'none';
       minimizedIcon.style.display = 'block';
+      updateAssistants();
     });
   
     document.getElementById('userInput').addEventListener('keypress', function (e) {
@@ -297,13 +339,13 @@
       }
       
       
-      function hideWaitingBubble() {
+    function hideWaitingBubble() {
         const waitingBubble = document.getElementById('waitingBubble');
         if (waitingBubble) {
           waitingBubble.remove();
         }
         clearInterval(waitingInterval);
-      }
+    }
 
     // Gestion des événements de redimensionnement
     const resizeHandleLeft = document.getElementById('resizeHandleLeft');
@@ -415,8 +457,14 @@
         } else {
             iframe.src = url;
         }
+
+        // Définir currentOrigin par rapport à originalUrl
+        const currentOrigin = new URL(originalUrl).origin; // Extraire l'origine de originalUrl
+
         // Mettre à jour l'URL dans la barre d'adresse sans recharger la page
-        history.pushState(null, '', url);
+        if (url.startsWith(currentOrigin)) {
+            history.pushState(null, '', url); // Mettre à jour l'URL si c'est le même domaine
+        }
     }
 
     // Intercepter les clics sur les liens du markdown

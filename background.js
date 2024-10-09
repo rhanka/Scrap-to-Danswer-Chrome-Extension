@@ -28,36 +28,37 @@ let assistants = [];
 
 // Fonction pour récupérer les assistants
 async function fetchAssistants(host, token) {
-  assistants = [];
-  let assistantId = 1;
-  let continueFetching = true;
+  if (assistants.length === 0) {
+    let assistantId = 1;
+    let continueFetching = true;
 
-  while (continueFetching) {
-      try {
-          const response = await fetch(`${host}/api/persona/${assistantId}`, {
-              method: 'GET',
-              headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json'
-              }
-          });
+    while (continueFetching) {
+        try {
+            const response = await fetch(`${host}/api/persona/${assistantId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
-          if (response.status === 400) {
-              continueFetching = false;
-          } else {
-              const data = await response.json();
-              assistants.push({
-                  id: assistantId,
-                  name: data.name,
-                  promptId: data.prompts[0].id
-              });
-              assistantId++;
-          }
-      } catch (error) {
-          continueFetching = false;
-      }
+            if (response.status === 400) {
+                continueFetching = false;
+            } else {
+                const data = await response.json();
+                assistants.push({
+                    id: assistantId,
+                    name: data.name,
+                    promptId: data.prompts[0].id
+                });
+                assistantId++;
+            }
+        } catch (error) {
+            continueFetching = false;
+        }
+    }
+    console.log(`${assistants.length} assistants available for ${host}`);
   }
-  console.log(`${assistants.length} assistants available for ${host}`);
 }
 
 function initDanswer() {
