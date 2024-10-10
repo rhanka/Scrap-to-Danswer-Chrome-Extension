@@ -26,6 +26,19 @@ let isUploading = false; // Indicator to know if an upload is in progress
 const chatSessions = {};
 let assistants = [];
 
+chrome.storage.sync.get('chatSessions', (data) => {
+  if (data.chatSessions) {
+      chatSessions = data.chatSessions; // Charger les sessions de chat depuis le stockage
+  }
+});
+
+// Fonction pour mettre à jour le stockage chaque fois que chatSessions est modifié
+function updateChatSessions() {
+  chrome.storage.sync.set({ chatSessions: chatSessions }, () => {
+      console.log('Sessions de chat mises à jour dans chrome.storage.sync');
+  });
+}
+
 // Fonction pour récupérer les assistants
 async function fetchAssistants(host, token) {
   if (assistants.length === 0) {
@@ -89,6 +102,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ chatSessionId: chatSessions[sender.tab.id] });
   } else if (message.action === 'setChatSessionId') {
     chatSessions[sender.tab.id] = message.chatSessionId;
+    updateChatSessions();
   } else if (message.action === 'createZip') {
     // Create the ZIP file
     createZipFile(message.method);
@@ -123,6 +137,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'closeTab') {
     // Close the tab
     chrome.tabs.remove(sender.tab.id);
+    chatSessions[tab.id] === undefined;
+    updateChatSessions();
   } else if (message.action === 'getDataCollection') {
     sendResponse({ dataCollection: dataCollection });
   }
@@ -342,7 +358,7 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   // Vérifier si l'URL est définie et commence par 'http' ou 'https'
   if (tab.url && (tab.url.startsWith('http') || tab.url.startsWith('https'))) {
-    console.log('Tab updated');
+    console.log('Tab updated', tabId);
     chrome.scripting.executeScript({
       target: { tabId: tabId },
       files: ['chatbotScript.js']

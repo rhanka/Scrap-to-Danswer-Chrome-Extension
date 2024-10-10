@@ -94,8 +94,8 @@
   
     // Appeler la fonction pour créer une session de chat lors de l'initialisation
     chrome.runtime.sendMessage({ action: 'getChatSessionId' }, response => {
+        console.log(response);
         chatSessionId = response.chatSessionId;
-    
         if (!chatSessionId) {
             createChatSession();   
         } else {
@@ -226,6 +226,7 @@
                 file_descriptors: [],
                 regenerate: false,
                 search_doc_ids: null,
+                chain_of_thought: "true",
                 retrieval_options: {
                     run_search: "auto",
                     real_time: "true"
@@ -468,7 +469,7 @@
     }
 
     // Intercepter les clics sur les liens du markdown
-    document.addEventListener('click', function(event) {
+    document.getElementById('chatbotContainer').addEventListener('click', function(event) {
         const target = event.target;
         if (target.tagName === 'A' && target.href) {
             event.preventDefault(); // Empêcher le comportement par défaut
