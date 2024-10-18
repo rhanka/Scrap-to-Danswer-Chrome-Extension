@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Scrap to Zip or Danswer",
+    "name": "Chatbot plugin for Danswer",
     "version": "0.1",
-    "description": "Recursive scrapping of a website, download in zip or upload to Danswer.",
+    "description": "Scrap & Chat with your docs with Danswer.",
     "permissions": ["activeTab","scripting", "downloads", "storage", "tabs"],
     "host_permissions": [
         "https://*/*",
