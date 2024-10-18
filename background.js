@@ -59,12 +59,14 @@ async function fetchAssistants(host, token) {
                 continueFetching = false;
             } else {
                 const data = await response.json();
-                assistants.push({
+                if (data.is_visible) {
+                  assistants.push({
                     id: assistantId,
                     name: data.name,
                     promptId: data.prompts[0].id
-                });
-                assistantId++;
+                  });
+                }
+              assistantId++;
             }
         } catch (error) {
             continueFetching = false;

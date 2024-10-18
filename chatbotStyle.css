@@ -29,6 +29,12 @@
     padding: 0px 0px 5px 0px ;
     background-color: #fff;
   }
+  #chatbot {
+    height: 100%;
+  }
+  #chatbotConfig {
+    height: 100%;
+  }
   #chatbox {
     height: calc(100% - 5.75rem);
     padding: 10px;

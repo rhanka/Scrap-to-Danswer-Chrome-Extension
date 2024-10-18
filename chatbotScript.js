@@ -58,6 +58,8 @@
         }
     });
 
+
+    
     // Fonction pour créer une session de chat
     function createChatSession() {
         chrome.storage.sync.get(['danswerHost', 'danswerToken','danswerAssistantId'], (data) => {
@@ -90,19 +92,7 @@
         });
     }
 
-    if (document.getElementById('chatbotContainer')) return; // Éviter d'injecter plusieurs fois
-  
-    // Appeler la fonction pour créer une session de chat lors de l'initialisation
-    chrome.runtime.sendMessage({ action: 'getChatSessionId' }, response => {
-        console.log(response);
-        chatSessionId = response.chatSessionId;
-        if (!chatSessionId) {
-            createChatSession();   
-        } else {
-            restoreChatSession();
-        }
-    })
-    
+    // Fonction pour restaurer une session de chat
     function restoreChatSession() {
         chrome.storage.sync.get(['danswerHost', 'danswerToken'], (data) => {
             const { danswerHost: host, danswerToken: token } = data;
@@ -129,34 +119,88 @@
         });
     }
 
+    if (document.getElementById('chatbotContainer')) return; // Éviter d'injecter plusieurs fois
+  
+    // Appeler la fonction pour créer une session de chat lors de l'initialisation
+    chrome.runtime.sendMessage({ action: 'getChatSessionId' }, response => {
+        console.log(response);
+        chatSessionId = response.chatSessionId;
+        if (!chatSessionId) {
+            createChatSession();   
+        } else {
+            restoreChatSession();
+        }
+    })
+    
+
+
     const chatbotContainer = document.createElement('div');
     chatbotContainer.id = 'chatbotContainer';
     chatbotContainer.style.display = 'none'; // Masquer le chatbot par défaut
     chatbotContainer.innerHTML = `
       <div id="chatbotHeader">
-        <select id="assistantSelect">
-            <option value="">Select Assistant</option>
-            <!-- Les options seront ajoutées dynamiquement ici -->
-        </select>
-        <input type="hidden" id="assistantId" />
-        <span id="minimizeButton" style="cursor: pointer;">✖️</span>
+            <select id="assistantSelect">
+                <option value="">Select Assistant</option>
+                <!-- Les options seront ajoutées dynamiquement ici -->
+            </select>
+            <input type="hidden" id="assistantId" />
+            <span id="minimizeButton" style="cursor: pointer;">✖️</span>
+        </div>
+        <div id="chatbot">
+        <div id="chatbox"></div>
+        <input type="text" id="userInput" placeholder="Type your message here...">
+        <button id="sendButton">Send</button>
       </div>
-      <div id="chatbox"></div>
-      <input type="text" id="userInput" placeholder="Type your message here...">
-      <button id="sendButton">Send</button>
+      <div id="chatbotConfig">
+        <div id="chatbotOptions">
+            <h4>Please provide configuration for Danswer backend</h4>
+            <p>
+                <label for="host">Danswer URL</label>
+                <input type="text" id="host" placeholder="https://your-host.danswer.ai" />
+            </p>
+            <p>
+                <label for="token">Basic Danswer API Token :</label>
+                <input type="text" id="token" placeholder="Enter your token here" />
+            </p>
+        </div>
+      </div>
       <div id="resizeHandleLeft" class="resize-handle"></div>
       <div id="resizeHandleTop" class="resize-handle"></div>
     `;
     document.body.appendChild(chatbotContainer);
+    chatbot=document.getElementById('chatbot');
+    chatbot.style.display = 'none';
+    chatbotConfig=document.getElementById('chatbotConfig');
+    chatbotConfig.style.display = 'none';
+    assistantSelect= document.getElementById('assistantSelect');
+    assistantSelect.style.display = 'none';
     // Écouter les changements dans le dropdown
-    document.getElementById('assistantSelect').addEventListener('change', (event) => {
+    assistantSelect.addEventListener('change', (event) => {
         const selectedId = event.target.value;
         document.getElementById('assistantId').value = selectedId; // Conserver l'assistantId
     });
-    document.getElementById('assistantSelect').addEventListener('input', function() {
+    assistantSelect.addEventListener('input', function() {
         // Mettre à jour chrome.storage.sync avec la nouvelle valeur
         chrome.storage.sync.set({ danswerAssistantId: document.getElementById('assistantSelect').value }, function() {
             console.log('Valeur mise à jour dans chrome.storage.sync:', document.getElementById('assistantSelect').value);
+        });
+    });
+
+    // Sync le storage à l'input de la config
+    const tokenInput = document.getElementById('token');
+    tokenInput.addEventListener('input', function() {
+        const newValue = tokenInput.value; 
+        chrome.storage.sync.set({ danswerToken: newValue }, function() {
+            console.log('Token value updated in chrome.storage.sync:', newValue);
+            refreshChatbotContainer();
+        });
+    });
+    const hostInput = document.getElementById('host');
+    hostInput.addEventListener('input', function() {
+        const newValue = hostInput.value; 
+        chrome.storage.sync.set({ danswerHost: newValue }, function() {
+            console.log('Host value updated in chrome.storage.sync:', newValue);
+            refreshChatbotContainer();
         });
     });
     updateAssistants();
@@ -169,9 +213,26 @@
     minimizedIcon.textContent = '💬';
     document.body.appendChild(minimizedIcon);
     
+    function refreshChatbotContainer() {
+        chrome.storage.sync.get(['danswerHost', 'danswerToken','danswerAssistantId'], (data) => {
+            const { danswerHost: host, danswerToken: token, danswerAssistantId: assistandId } = data;
+            if (!host || !token) {
+                assistantSelect.style.display = 'none';
+                chatbotConfig.style.display = 'block';
+                chatbot.style.display = 'none';
+            } else {
+                updateAssistants();
+                assistantSelect.style.display = 'block';
+                chatbotConfig.style.display = 'none';
+                chatbot.style.display = 'block';
+            }
+        });
+    }
+
     minimizedIcon.addEventListener('click', () => {
-      chatbotContainer.style.display = 'block';
-      minimizedIcon.style.display = 'none';
+        refreshChatbotContainer();
+        chatbotContainer.style.display = 'block';
+        minimizedIcon.style.display = 'none';
     });
   
     const minimizeButton = document.getElementById('minimizeButton');
