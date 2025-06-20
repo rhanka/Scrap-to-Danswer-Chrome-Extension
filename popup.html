@@ -17,7 +17,7 @@
   <h2>Choose action</h2>
   <button id="collect-links">Scrap Site</button>
   <button id="download">Download Zip</button>
-  <button id="upload">Upload to Danswer</button>
+  <button id="upload">Upload to OpenAI</button>
   <button id="reset">Reset</button>
 
   <h2>Data Collection</h2>
@@ -31,22 +31,12 @@
   <label for="scrapRegex">Scrap regex</label>
   <input type="text" id="scrapRegex" placeholder="match.*that (scraped urls will contain that)" />
 
-  <h4>Danswer</h4>
-  <label for="host">Danswer URL :</label>
-  <input type="text" id="host" placeholder="https://your-host.danswer.ai" />
-  
-  <label for="token">Basic Danswer API Token :</label>
-  <input type="text" id="token" placeholder="Enter your token here" />
+  <h4>OpenAI</h4>
+  <label for="openaiKey">OpenAI API Key :</label>
+  <input type="text" id="openaiKey" placeholder="sk-..." />
 
-  <label for="assistantSelect">Default Assistant for Chatbot</label>
-  <select id="assistantSelect">
-      <option value="">Select Assistant</option>
-      <!-- Les options seront ajoutées dynamiquement ici -->
-  </select>
-  <input type="hidden" id="assistantId" />
-  
-  <label for="connectorId">Danswer Connector ID :</label>
-  <input type="number" id="connectorId" placeholder="Enter your Connector ID here" />
+  <label for="assistantId">Assistant ID (optional)</label>
+  <input type="text" id="assistantId" placeholder="assistant_xxxx" />
 
   <button id="save">Save</button>
   <!-- Reference the external JS file -->

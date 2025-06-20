@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Chatbot plugin for Danswer",
+    "name": "Scrap & Chat with OpenAI",
     "version": "0.1",
-    "description": "Scrap & Chat with your docs with Danswer.",
+    "description": "Scrap web sites, push them to OpenAI RAG and chat using deep-chat.",
     "permissions": ["activeTab","scripting", "downloads", "storage", "tabs"],
     "host_permissions": [
         "https://*/*",
