@@ -19,93 +19,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 let allLinks = new Set();
 let processedLinks = new Set();
 let dataCollection = [];
-let uploadQueue = []; // Queue for documents to upload
 let isUploading = false; // Indicator to know if an upload is in progress
-
-// Chatbot variables
-const chatSessions = {};
-let assistants = [];
-
-chrome.storage.sync.get('chatSessions', (data) => {
-  if (data.chatSessions) {
-      chatSessions = data.chatSessions; // Charger les sessions de chat depuis le stockage
-  }
-});
-
-// Fonction pour mettre à jour le stockage chaque fois que chatSessions est modifié
-function updateChatSessions() {
-  chrome.storage.sync.set({ chatSessions: chatSessions }, () => {
-      console.log('Sessions de chat mises à jour dans chrome.storage.sync');
-  });
-}
-
-// Fonction pour récupérer les assistants
-async function fetchAssistants(host, token) {
-  if (assistants.length === 0) {
-    let assistantId = 1;
-    let continueFetching = true;
-
-    while (continueFetching) {
-        try {
-            const response = await fetch(`${host}/api/persona/${assistantId}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.status === 400) {
-                continueFetching = false;
-            } else {
-                const data = await response.json();
-                if (data.is_visible) {
-                  assistants.push({
-                    id: assistantId,
-                    name: data.name,
-                    promptId: data.prompts[0].id
-                  });
-                }
-              assistantId++;
-            }
-        } catch (error) {
-            continueFetching = false;
-        }
-    }
-    console.log(`${assistants.length} assistants available for ${host}`);
-  }
-}
-
-function initDanswer() {
-  chrome.storage.sync.get(['danswerHost', 'danswerToken'], (result) => {
-    const host = result.danswerHost;
-    const token = result.danswerToken;
-
-    if (host && token) {
-        fetchAssistants(host, token).then(() => {
-          chrome.runtime.sendMessage({ action: 'getDataCollection' });
-        })
-    } else {
-        console.error('Host ou token Danswer non configuré');
-    }
-  });
-}
-
-initDanswer();
 
 // Listen to messages from the popup or content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'initDanswer') {
-    initDanswer()
-  } else if (message.action === 'getAssistants') {
-    sendResponse({ assistants: assistants});
-  } else if (message.action === 'getChatSessionId') {
-    console.log(sender.tab.id, chatSessions);
-    sendResponse({ chatSessionId: chatSessions[sender.tab.id] });
-  } else if (message.action === 'setChatSessionId') {
-    chatSessions[sender.tab.id] = message.chatSessionId;
-    updateChatSessions();
-  } else if (message.action === 'createZip') {
+  if (message.action === 'createZip') {
     // Create the ZIP file
     createZipFile(message.method);
   } else if (message.action === 'reset') {
@@ -113,7 +31,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     allLinks = new Set();
     processedLinks = new Set();
     dataCollection = [];
-    uploadQueue = [];
     isUploading = false;
     chrome.runtime.sendMessage({ action: 'updateDocCount' });
     console.log('Cleaned all data')
@@ -130,17 +47,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const pageData = { url: message.url, content: message.content };
     console.log(message.url);
     dataCollection.push(pageData);
-    // // Feature deactivated as very slow - prefer zip + metadata
-    // uploadQueue.push(pageData); // Add the document to the upload queue
-    // processUploadQueue(); // Start processing the upload queue
+    // Feature deactivated as very slow - prefer zip + metadata
     processedLinks.add(message.url);
     chrome.runtime.sendMessage({ action: 'updateDocCount' });
     processNextLink(); 
   } else if (message.action === 'closeTab') {
     // Close the tab
     chrome.tabs.remove(sender.tab.id);
-    chatSessions[tab.id] === undefined;
-    updateChatSessions();
   } else if (message.action === 'getDataCollection') {
     sendResponse({ dataCollection: dataCollection });
   }
@@ -188,7 +101,7 @@ function createZipFile(action) {
     // Generate the domain for the ZIP name
     const domain = new URL(dataCollection[0].url).hostname;
 
-    // Create the .danswer_metadata.json file
+    // Create a metadata file for the scraped pages
     const metadata = dataCollection.map(page => {
       const fileName = page.url.replace(/[^a-z0-9]/gi, '_') + '.html';
       return {
@@ -198,8 +111,8 @@ function createZipFile(action) {
       };
     });
 
-    // Add the .danswer_metadata.json file to the ZIP
-    zip.file('.danswer_metadata.json', JSON.stringify(metadata, null, 4));
+    // Add the metadata file to the ZIP
+    zip.file('metadata.json', JSON.stringify(metadata, null, 4));
 
     // Generate Zip file
     zip.generateAsync({ type: 'blob' })
@@ -208,8 +121,8 @@ function createZipFile(action) {
           // If the user chooses to download
           downloadZip(blob);
         } else if (action === 'upload') {
-          // If the user chooses to upload to the Danswer API
-          uploadToDanswer(blob);
+          // If the user chooses to upload to the OpenAI API
+          uploadToOpenAI(blob);
         }
       })
       .catch(error => {
@@ -252,91 +165,42 @@ function generateSlug(text) {
     .toLowerCase();
 }
 
-// Function to upload a document to Danswer
-function uploadToDanswer(page) {
-  return new Promise((resolve, reject) => {
-    chrome.storage.sync.get(['danswerHost', 'danswerToken', 'danswerConnectorId'], async function(data) {
-      const { danswerHost: host, danswerToken: token, danswerConnectorId: connectorId } = data;
+// Upload the ZIP archive to OpenAI Retrieval API
+function uploadToOpenAI(zipBlob) {
+  chrome.storage.sync.get(['openaiKey'], async function(data) {
+    const apiKey = data.openaiKey;
+    if (!apiKey) {
+      console.error('OpenAI key not configured');
+      return;
+    }
 
-      if (!host || !token || connectorId == undefined) {
-        console.error("Host, token or connector ID not configured");
-        reject("Missing configurations");
-        return;
+    const formData = new FormData();
+    formData.append('file', zipBlob, 'documents.zip');
+    formData.append('purpose', 'assistants');
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Build sections with the document
-      const sections = [{
-        text: page.content,
-        link: page.url
-      }];
-
-      // Use the domain and timestamp as a unique document identifier
-      const domain = new URL(page.url).hostname;
-      const documentId = generateSlug(page.url);
-
-      const requestBody = {
-        cc_pair_id: connectorId,
-        document: {
-          id: documentId,
-          sections: sections,
-          source: "web",
-          semantic_identifier: domain,
-          metadata: { tag: "informational" },
-          doc_updated_at: new Date().toISOString()
-        }
-      };
-
-      try {
-        const response = await fetch(`${host}/api/danswer-api/ingestion`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const resultText = await response.text();
-        console.log(`Document successfully uploaded: ${documentId}`, resultText);
-        resolve(); // Resolve the promise
-      } catch (error) {
-        console.error(`Error uploading document ${documentId}:`, error);
-        reject(error); // Reject the promise
-      }
-    });
+      const result = await response.json();
+      console.log('Upload success', result);
+    } catch (error) {
+      console.error('Error uploading document:', error);
+    }
   });
 }
 
 // New function to process the upload queue sequentially
-function processUploadQueue() {
-  if (isUploading || uploadQueue.length === 0) {
-    // An upload is already in progress or the queue is empty
-    return;
-  }
 
-  isUploading = true; // Indicate that an upload is in progress
-  const pageData = uploadQueue.shift(); // Extract the first document from the queue
-
-  uploadToDanswer(pageData)
-    .then(() => {
-      isUploading = false; // The upload is complete
-      // Check if there are other documents to process
-      if (uploadQueue.length > 0) {
-        processUploadQueue(); // Process the next document
-      }
-    })
-    .catch((error) => {
-      console.error('Error uploading document:', error);
-      isUploading = false; // In case of error, allow the process to continue
-      if (uploadQueue.length > 0) {
-        processUploadQueue();
-      }
-    });
-}
 
 // Convert ArrayBuffer to base64
 function arrayBufferToBase64(buffer) {

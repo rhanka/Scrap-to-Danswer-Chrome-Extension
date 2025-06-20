@@ -1,5 +1,5 @@
-# Scrap to Danswer
+# Scrap to OpenAI RAG
 
-This is a basic initial chrome extension to basic recursively scrap a web site and either chose to download it as a zip or to send it to Danswer.
+This Chrome extension lets you recursively scrape a web site. The collected pages can either be downloaded as a zip archive or pushed directly to an OpenAI Retrieval-Augmented Generation (RAG) endpoint. A chat bubble is injected into pages using **deep-chat** so you can talk with your documents through OpenAI models.
 
-This is in very initial stage and experimental, with absolute ugly interface, with no alert when scrap and upload are finished.
+This project is experimental and still very minimal.
